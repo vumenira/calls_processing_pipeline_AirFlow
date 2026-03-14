@@ -1,0 +1,13 @@
+[
+  {"call_id": 51, "duration_sec": 187, "short_description": "Inbound call about account access issue, password reset completed."},
+  {"call_id": 52, "duration_sec": 0,   "short_description": "No answer on outbound follow-up, added to callback queue."},
+  {"call_id": 53, "duration_sec": 0,   "short_description": "Voicemail left regarding upcoming contract renewal deadline."},
+  {"call_id": 54, "duration_sec": 243, "short_description": "Outbound call confirmed new subscription plan selected."},
+  {"call_id": 55, "duration_sec": 312, "short_description": "Inbound technical support, resolved integration configuration error."},
+  {"call_id": 56, "duration_sec": 0,   "short_description": "Customer unavailable, scheduled callback for next morning."},
+  {"call_id": 57, "duration_sec": 198, "short_description": "Inbound inquiry about billing cycle, issue clarified and resolved."},
+  {"call_id": 58, "duration_sec": 0,   "short_description": "Voicemail left requesting feedback on recent support ticket."},
+  {"call_id": 59, "duration_sec": 0,   "short_description": "Missed inbound call during team standup, flagged for callback."},
+  {"call_id": 60, "duration_sec": 274, "short_description": "Outbound sales call, demo scheduled for following week."},
+  {"call_id": 61, "duration_sec": 155, "short_description": "Inbound call about shipping delay, escalated to logistics team."}
+]
