@@ -1,7 +1,7 @@
 from airflow import DAG
 from airflow.sdk import Variable
 from airflow.providers.standard.operators.python import PythonOperator
-from datetime import datetime
+from datetime import datetime, timedelta
 import pymysql
 import duckdb
 import json
@@ -18,6 +18,7 @@ MYSQL_CONFIG = {
 API_PATH = "/usr/local/airflow/data/calls_json"
 
 DUCKDB_PATH = "/usr/local/airflow/data/calls.duckdb"
+
 
 
 def detect_new_calls(**context):
@@ -39,6 +40,7 @@ def detect_new_calls(**context):
     context["ti"].xcom_push(key="new_calls", value=new_calls)
 
     print(f"{len(new_calls)} new calls detected.")
+
 
 
 def load_telephony_from_api(**context):
@@ -67,9 +69,62 @@ def load_telephony_from_api(**context):
     context["ti"].xcom_push(key = "telephony_data", value = telephony)
     print(f"{len(telephony)} telephony calls loaded.")
 
+
+
+def validate_data(**context):
+
+    new_calls = context["ti"].xcom_pull(task_ids="detect_new_calls", key="new_calls")
+    telephony = context["ti"].xcom_pull(task_ids="load_telephony_from_api", key="telephony_data")
+    errors = set()
+
+    if not new_calls:
+        print("No data to validate.")
+        return
+
+    if len(new_calls) != len(set(new_calls)):
+        duplicates = [int(x) for x in new_calls if new_calls.count(x) > 1]
+        errors.update(duplicates)
+        print(f"Duplicate call_ids found: {set(duplicates)}")
+
+    for call_id, data in telephony.items():
+        if data["duration_sec"] is not None and data["duration_sec"] < 0:
+            errors.add(int(call_id))
+            print(f"call_id {call_id} has negative duration: {data['duration_sec']}")
+
+    conn = pymysql.connect(**MYSQL_CONFIG)
+    cursor = conn.cursor()
+
+    placeholders = ",".join(["%s"] * len(new_calls))
+    cursor.execute(f"""
+        SELECT c.call_id
+        FROM calls c
+        LEFT JOIN employees e ON c.employee_id = e.employee_id
+        WHERE c.call_id IN ({placeholders})
+        AND e.employee_id IS NULL
+    """, tuple(new_calls))
+
+    no_enployee = [int(row[0]) for row in cursor.fetchall()]
+    if no_enployee:
+        errors.update(no_enployee)
+        print(f"call_ids with missing employee: {no_enployee}")
+
+    cursor.close()
+    conn.close()
+
+    valid = [int(c) for c in new_calls if c not in errors]
+
+    for call in errors:
+        print(f"[QUALITY ERROR] {call}")
+
+    print(f"[QUALITY OK] All checks passed for {len(valid)} calls.")
+
+    context["ti"].xcom_push(key = "valid_calls", value = valid)
+
+
+
 def transform_and_load_duckdb(**context):
 
-    new_calls = context["ti"].xcom_pull(task_ids = "detect_new_calls", key = "new_calls")
+    new_calls = context["ti"].xcom_pull(task_ids = "validate_data", key = "valid_calls")
     telephony = context["ti"].xcom_pull(task_ids = "load_telephony_from_api", key = "telephony_data")
 
     if not new_calls:
@@ -131,16 +186,16 @@ def transform_and_load_duckdb(**context):
 
     print(f"inserted {len(merged_data)} rows into DuckDB.")
 
-    Variable.set("last_loaded_call_time", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-
+    Variable.set("last_loaded_call_time", str(max(row[2] for row in mysql_data)))
 
 
 
 default_args = {
     "owner": "airflow",
     "start_date": datetime(2026, 1, 1),
-    "catchup": False}
+    "catchup": False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=1),}
 
 with DAG(
     "calls_processing_dag",
@@ -155,7 +210,10 @@ with DAG(
         task_id="load_telephony_from_api",
         python_callable=load_telephony_from_api)
     t3 = PythonOperator(
+        task_id="validate_data",
+        python_callable=validate_data)
+    t4 = PythonOperator(
         task_id="transform_and_load_duckdb",
         python_callable=transform_and_load_duckdb)
 
-    t1 >> t2 >> t3
+    t1 >> t2 >> t3 >> t4

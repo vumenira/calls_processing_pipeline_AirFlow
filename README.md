@@ -4,7 +4,7 @@ A data engineering assignment project built with Apache Airflow, MySQL, and Duck
 
 ## Overview
 
-![AirFlow pipeline](airflow_shot.jpg)
+![Airflow window](airflow_shot.jpg)
 
 This project implements an incremental ETL pipeline that merges call data from two sources — a MySQL database and a mock Telephony API (JSON files) — and loads the enriched result into DuckDB for analytics.
 
@@ -18,12 +18,13 @@ This project implements an incremental ETL pipeline that merges call data from t
 ## Pipeline Structure
 
 ```
-detect_new_calls → load_telephony_from_api → transform_and_load_duckdb
+detect_new_calls → load_telephony_from_api → validate_data → transform_and_load_duckdb
 ```
 
 1. **detect_new_calls** — queries MySQL for calls newer than the last watermark, stored as an Airflow Variable
 2. **load_telephony_from_api** — reads JSON files and extracts duration and description for each call
-3. **transform_and_load_duckdb** — joins MySQL and JSON data, writes enriched records incrementally into DuckDB
+3. **validate_data** — filters out records with negative duration, missing employees, or duplicate call IDs
+4. **transform_and_load_duckdb** — joins MySQL and JSON data, writes enriched records incrementally into DuckDB
 
 ## Result
 
